@@ -40,6 +40,8 @@ dev = [
     "pytest-asyncio>=0.24.0",
     "pytest-cov>=6.0.0",
     "ruff>=0.8.0",
+    "commitizen>=4.0.0",
+    "pre-commit>=4.0.0",
 ]
 
 [project.scripts]
@@ -93,3 +95,13 @@ markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
     "integration: marks tests as integration tests",
 ]
+
+[tool.commitizen]
+name = "cz_conventional_commits"
+version = "0.1.1"
+tag_format = "$version"
+version_files = [
+    "pyproject.toml:version",
+    "src/pymelos/__init__.py:__version__",
+]
+update_changelog_on_bump = false
