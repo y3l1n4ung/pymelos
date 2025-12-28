@@ -62,10 +62,6 @@ version = "0.0.0"
 description = "Python monorepo"
 requires-python = ">=3.12"
 
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
-
 [tool.uv]
 workspace = {{ members = ["packages/*"] }}
 
