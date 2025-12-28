@@ -136,3 +136,69 @@ class TestListCommandClass:
         result = cmd.execute()
         assert hasattr(result, "packages")
         assert len(result.packages) > 0
+
+
+class TestListEdgeCases:
+    """Edge case tests for list command."""
+
+    def test_empty_workspace(self, temp_dir: Path) -> None:
+        """Should handle workspace with no packages."""
+        pymelos_yaml = temp_dir / "pymelos.yaml"
+        pymelos_yaml.write_text("name: empty\npackages:\n  - packages/*\n")
+        (temp_dir / "packages").mkdir()
+
+        workspace = Workspace.discover(temp_dir)
+        result = list_packages(workspace)
+
+        assert len(result.packages) == 0
+
+    def test_single_package(self, temp_dir: Path) -> None:
+        """Should handle workspace with single package."""
+        pymelos_yaml = temp_dir / "pymelos.yaml"
+        pymelos_yaml.write_text("name: single\npackages:\n  - packages/*\n")
+
+        pkg = temp_dir / "packages" / "only-pkg"
+        pkg.mkdir(parents=True)
+        (pkg / "pyproject.toml").write_text('[project]\nname = "only-pkg"\nversion = "1.0.0"\n')
+
+        workspace = Workspace.discover(temp_dir)
+        result = list_packages(workspace)
+
+        assert len(result.packages) == 1
+        assert result.packages[0].name == "only-pkg"
+
+    def test_scope_matches_nothing(self, workspace_dir: Path) -> None:
+        """Should return empty when scope matches no packages."""
+        workspace = Workspace.discover(workspace_dir)
+        result = list_packages(workspace, scope="nonexistent-*")
+
+        assert len(result.packages) == 0
+
+    def test_ignore_all_packages(self, workspace_dir: Path) -> None:
+        """Should return empty when all packages are ignored."""
+        workspace = Workspace.discover(workspace_dir)
+        result = list_packages(workspace, ignore=["pkg-*"])
+
+        assert len(result.packages) == 0
+
+    def test_package_without_dependencies(self, workspace_dir: Path) -> None:
+        """Should handle package with no dependencies."""
+        workspace = Workspace.discover(workspace_dir)
+        result = list_packages(workspace)
+
+        pkg_a = next(p for p in result.packages if p.name == "pkg-a")
+        assert pkg_a.dependencies == []
+
+    def test_package_without_description(self, temp_dir: Path) -> None:
+        """Should handle package without description."""
+        pymelos_yaml = temp_dir / "pymelos.yaml"
+        pymelos_yaml.write_text("name: test\npackages:\n  - packages/*\n")
+
+        pkg = temp_dir / "packages" / "no-desc"
+        pkg.mkdir(parents=True)
+        (pkg / "pyproject.toml").write_text('[project]\nname = "no-desc"\nversion = "1.0.0"\n')
+
+        workspace = Workspace.discover(temp_dir)
+        result = list_packages(workspace)
+
+        assert result.packages[0].description is None

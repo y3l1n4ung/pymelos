@@ -177,3 +177,62 @@ class TestCleanCommandClass:
         assert cmd.is_protected(Path(".git"), {".git", ".venv"})
         assert cmd.is_protected(Path(".venv"), {".git", ".venv"})
         assert not cmd.is_protected(Path("__pycache__"), {".git", ".venv"})
+
+
+class TestCleanEdgeCases:
+    """Edge case tests for clean command."""
+
+    async def test_empty_workspace(self, temp_dir: Path) -> None:
+        """Should handle workspace with no packages."""
+        pymelos_yaml = temp_dir / "pymelos.yaml"
+        pymelos_yaml.write_text("name: empty\npackages:\n  - packages/*\n")
+        (temp_dir / "packages").mkdir()
+
+        workspace = Workspace.discover(temp_dir)
+        result = await clean(workspace)
+
+        assert result.files_removed == 0
+        assert result.dirs_removed == 0
+
+    async def test_nested_pycache(self, workspace_dir: Path) -> None:
+        """Should clean deeply nested __pycache__."""
+        pkg_a = workspace_dir / "packages" / "pkg-a"
+        nested = pkg_a / "src" / "pkg_a" / "sub" / "__pycache__"
+        nested.mkdir(parents=True)
+        (nested / "deep.pyc").write_bytes(b"fake")
+
+        workspace = Workspace.discover(workspace_dir)
+        result = await clean(workspace, patterns=["**/__pycache__"])
+
+        assert not nested.exists()
+
+    async def test_multiple_patterns(self, workspace_dir: Path) -> None:
+        """Should clean with multiple patterns."""
+        pkg_a = workspace_dir / "packages" / "pkg-a"
+        (pkg_a / "__pycache__").mkdir()
+        (pkg_a / "dist").mkdir()
+
+        workspace = Workspace.discover(workspace_dir)
+        result = await clean(workspace, patterns=["__pycache__", "dist"])
+
+        assert not (pkg_a / "__pycache__").exists()
+        assert not (pkg_a / "dist").exists()
+
+    async def test_file_pattern(self, workspace_dir: Path) -> None:
+        """Should clean files matching pattern."""
+        pkg_a = workspace_dir / "packages" / "pkg-a"
+        (pkg_a / "test.pyc").write_bytes(b"fake")
+
+        workspace = Workspace.discover(workspace_dir)
+        result = await clean(workspace, patterns=["*.pyc"])
+
+        assert not (pkg_a / "test.pyc").exists()
+        assert result.files_removed >= 1
+
+    async def test_empty_pattern_list(self, workspace_dir: Path) -> None:
+        """Should handle empty pattern list."""
+        workspace = Workspace.discover(workspace_dir)
+        result = await clean(workspace, patterns=[])
+
+        assert result.files_removed == 0
+        assert result.dirs_removed == 0

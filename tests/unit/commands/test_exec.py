@@ -116,3 +116,61 @@ class TestExecCommandClass:
         assert options.fail_fast is False
         assert options.topological is False
         assert options.scope is None
+
+
+class TestExecEdgeCases:
+    """Edge case tests for exec command."""
+
+    async def test_command_with_spaces(self, workspace_dir: Path) -> None:
+        """Should handle commands with spaces."""
+        workspace = Workspace.discover(workspace_dir)
+        result = await exec_command(workspace, "echo hello world")
+
+        assert all("hello world" in r.stdout for r in result.results)
+
+    async def test_command_with_quotes(self, workspace_dir: Path) -> None:
+        """Should handle commands with quoted strings."""
+        workspace = Workspace.discover(workspace_dir)
+        result = await exec_command(workspace, 'echo "quoted string"')
+
+        assert all("quoted string" in r.stdout for r in result.results)
+
+    async def test_command_with_pipe(self, workspace_dir: Path) -> None:
+        """Should handle commands with pipes."""
+        workspace = Workspace.discover(workspace_dir)
+        result = await exec_command(workspace, "echo test | cat")
+
+        assert all("test" in r.stdout for r in result.results)
+
+    async def test_nonexistent_command(self, workspace_dir: Path) -> None:
+        """Should report failure for nonexistent command."""
+        workspace = Workspace.discover(workspace_dir)
+        result = await exec_command(workspace, "nonexistent_cmd_12345")
+
+        assert all(not r.success for r in result.results)
+
+    async def test_empty_workspace(self, temp_dir: Path) -> None:
+        """Should return empty result for workspace with no packages."""
+        pymelos_yaml = temp_dir / "pymelos.yaml"
+        pymelos_yaml.write_text("name: empty\npackages:\n  - packages/*\n")
+        (temp_dir / "packages").mkdir()
+
+        workspace = Workspace.discover(temp_dir)
+        result = await exec_command(workspace, "echo test")
+
+        assert len(result.results) == 0
+
+    async def test_working_directory(self, workspace_dir: Path) -> None:
+        """Should execute command in package directory."""
+        workspace = Workspace.discover(workspace_dir)
+        result = await exec_command(workspace, "pwd", scope="pkg-a")
+
+        assert "pkg-a" in result.results[0].stdout
+
+    async def test_concurrent_execution(self, workspace_dir: Path) -> None:
+        """Should execute concurrently with multiple packages."""
+        workspace = Workspace.discover(workspace_dir)
+        result = await exec_command(workspace, "echo test", concurrency=3)
+
+        assert len(result.results) == 3
+        assert all(r.success for r in result.results)

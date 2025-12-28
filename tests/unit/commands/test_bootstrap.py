@@ -242,3 +242,86 @@ version = "0.0.0"
         call_kwargs = mock_sync.call_args
         # locked should be False since lockfile doesn't exist
         assert call_kwargs[1]["locked"] is False
+
+
+class TestBootstrapEdgeCases:
+    """Edge case tests for bootstrap command."""
+
+    @patch("pymelos.commands.bootstrap.sync")
+    async def test_empty_workspace(self, mock_sync: AsyncMock, temp_dir: Path) -> None:
+        """Should handle workspace with no packages."""
+        pymelos_yaml = temp_dir / "pymelos.yaml"
+        pymelos_yaml.write_text("name: empty\npackages:\n  - packages/*\n")
+        (temp_dir / "packages").mkdir()
+
+        mock_sync.return_value = (0, "Resolved 0 packages", "")
+
+        workspace = Workspace.discover(temp_dir)
+        result = await bootstrap(workspace)
+
+        assert result.success is True
+        assert result.packages_installed == 0
+
+    @patch("pymelos.commands.bootstrap.sync")
+    async def test_clean_first_option(self, mock_sync: AsyncMock, temp_dir: Path) -> None:
+        """Should clean before bootstrap when requested."""
+        pymelos_yaml = temp_dir / "pymelos.yaml"
+        pymelos_yaml.write_text("name: test\npackages:\n  - packages/*\n")
+        (temp_dir / "packages").mkdir()
+
+        mock_sync.return_value = (0, "OK", "")
+
+        workspace = Workspace.discover(temp_dir)
+        result = await bootstrap(workspace, clean_first=True)
+
+        assert result.success is True
+
+    @patch("pymelos.commands.bootstrap.sync")
+    async def test_multiple_sync_errors(
+        self, mock_sync: AsyncMock, temp_dir: Path
+    ) -> None:
+        """Should fail if both locked and unlocked sync fail."""
+        pymelos_yaml = temp_dir / "pymelos.yaml"
+        pymelos_yaml.write_text("name: test\npackages:\n  - packages/*\n")
+        (temp_dir / "packages").mkdir()
+        (temp_dir / "uv.lock").write_text("# lock")
+
+        # Both attempts fail
+        mock_sync.side_effect = [
+            (1, "", "error: lockfile needs to be updated"),
+            (1, "", "error: package not found"),
+        ]
+
+        workspace = Workspace.discover(temp_dir)
+        result = await bootstrap(workspace)
+
+        assert result.success is False
+
+    @patch("pymelos.commands.bootstrap.sync")
+    async def test_verbose_output_captured(
+        self, mock_sync: AsyncMock, temp_dir: Path
+    ) -> None:
+        """Should capture uv output."""
+        pymelos_yaml = temp_dir / "pymelos.yaml"
+        pymelos_yaml.write_text("name: test\npackages:\n  - packages/*\n")
+        (temp_dir / "packages").mkdir()
+
+        mock_sync.return_value = (0, "Resolved 5 packages in 100ms", "")
+
+        workspace = Workspace.discover(temp_dir)
+        result = await bootstrap(workspace)
+
+        assert "Resolved 5 packages" in result.uv_output
+
+    def test_options_all_false(self) -> None:
+        """Should support all options disabled."""
+        options = BootstrapOptions(
+            clean_first=False,
+            frozen=False,
+            locked=False,
+            skip_hooks=False,
+        )
+        assert options.clean_first is False
+        assert options.frozen is False
+        assert options.locked is False
+        assert options.skip_hooks is False

@@ -185,3 +185,68 @@ version = "1.0.0"
         packages = cmd.get_packages()
         assert len(packages) == 1
         assert packages[0].name == "pkg-a"
+
+
+class TestRunEdgeCases:
+    """Edge case tests for run command."""
+
+    @pytest.fixture
+    def workspace_with_scripts(self, temp_dir: Path) -> Path:
+        """Create workspace with various scripts."""
+        pymelos_yaml = temp_dir / "pymelos.yaml"
+        pymelos_yaml.write_text("""
+name: test-workspace
+packages:
+  - packages/*
+
+scripts:
+  passing:
+    run: "true"
+  failing:
+    run: "false"
+  with_env:
+    run: echo $MY_VAR
+    env:
+      MY_VAR: "test_value"
+""")
+
+        pyproject = temp_dir / "pyproject.toml"
+        pyproject.write_text('[project]\nname = "test"\nversion = "0.0.0"\n')
+
+        pkg = temp_dir / "packages" / "pkg-a"
+        pkg.mkdir(parents=True)
+        (pkg / "pyproject.toml").write_text('[project]\nname = "pkg-a"\nversion = "1.0.0"\n')
+
+        return temp_dir
+
+    async def test_script_with_failing_command(self, workspace_with_scripts: Path) -> None:
+        """Should report failure for failing script."""
+        workspace = Workspace.discover(workspace_with_scripts)
+        result = await run_script(workspace, "failing")
+
+        assert any(not r.success for r in result.results)
+
+    async def test_script_with_env_vars(self, workspace_with_scripts: Path) -> None:
+        """Should pass environment variables to script."""
+        workspace = Workspace.discover(workspace_with_scripts)
+        result = await run_script(workspace, "with_env")
+
+        assert any("test_value" in r.stdout for r in result.results)
+
+    async def test_empty_workspace_with_script(self, temp_dir: Path) -> None:
+        """Should return empty result for workspace with no packages."""
+        pymelos_yaml = temp_dir / "pymelos.yaml"
+        pymelos_yaml.write_text("name: empty\npackages:\n  - packages/*\nscripts:\n  test:\n    run: echo hi\n")
+        (temp_dir / "packages").mkdir()
+
+        workspace = Workspace.discover(temp_dir)
+        result = await run_script(workspace, "test")
+
+        assert len(result.results) == 0
+
+    def test_run_options_defaults(self) -> None:
+        """Should have correct default options."""
+        options = RunOptions(script_name="test")
+        assert options.concurrency == 4
+        assert options.fail_fast is False
+        assert options.topological is True

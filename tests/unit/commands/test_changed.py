@@ -134,3 +134,87 @@ class TestChangedCommandClass:
         # This should work - since is required
         options = ChangedOptions(since="HEAD~1")
         assert options.since == "HEAD~1"
+
+
+class TestChangedEdgeCases:
+    """Edge case tests for changed command."""
+
+    def test_multiple_files_in_package(self, git_workspace: Path) -> None:
+        """Should count multiple changed files in package."""
+        pkg_a = git_workspace / "packages" / "pkg-a"
+
+        # Modify multiple files
+        (pkg_a / "file1.py").write_text("# new file 1")
+        (pkg_a / "file2.py").write_text("# new file 2")
+
+        os.system(f"cd {git_workspace} && git add -A && git commit -q -m 'Add files'")
+
+        workspace = Workspace.discover(git_workspace)
+        result = get_changed_packages(workspace, "HEAD~1")
+
+        pkg_a_info = next(p for p in result.changed if p.name == "pkg-a")
+        assert pkg_a_info.files_changed >= 2
+
+    def test_changes_in_multiple_packages(self, git_workspace: Path) -> None:
+        """Should detect changes in multiple packages."""
+        pkg_a = git_workspace / "packages" / "pkg-a"
+        pkg_b = git_workspace / "packages" / "pkg-b"
+
+        (pkg_a / "new.py").write_text("# pkg-a change")
+        (pkg_b / "new.py").write_text("# pkg-b change")
+
+        os.system(f"cd {git_workspace} && git add -A && git commit -q -m 'Change both'")
+
+        workspace = Workspace.discover(git_workspace)
+        result = get_changed_packages(workspace, "HEAD~1", include_dependents=False)
+
+        names = [p.name for p in result.changed]
+        assert "pkg-a" in names
+        assert "pkg-b" in names
+
+    def test_transitive_dependents(self, git_workspace: Path) -> None:
+        """Should include transitive dependents."""
+        # pkg-c depends on pkg-b which depends on pkg-a
+        pkg_a = git_workspace / "packages" / "pkg-a"
+        (pkg_a / "change.py").write_text("# change in pkg-a")
+
+        os.system(f"cd {git_workspace} && git add -A && git commit -q -m 'Change pkg-a'")
+
+        workspace = Workspace.discover(git_workspace)
+        result = get_changed_packages(workspace, "HEAD~1", include_dependents=True)
+
+        names = [p.name for p in result.changed]
+        # Should include pkg-a (direct), pkg-b (depends on a), pkg-c (depends on b)
+        assert "pkg-a" in names
+        assert "pkg-b" in names
+        assert "pkg-c" in names
+
+    def test_file_outside_packages(self, git_workspace: Path) -> None:
+        """Should ignore changes outside packages."""
+        (git_workspace / "root_file.py").write_text("# root change")
+
+        os.system(f"cd {git_workspace} && git add -A && git commit -q -m 'Root change'")
+
+        workspace = Workspace.discover(git_workspace)
+        result = get_changed_packages(workspace, "HEAD~1")
+
+        # No packages should be marked as changed
+        assert len(result.changed) == 0
+        assert result.total_files_changed >= 1
+
+    def test_deleted_file(self, git_workspace: Path) -> None:
+        """Should detect package as changed when file deleted."""
+        pkg_a = git_workspace / "packages" / "pkg-a"
+        temp_file = pkg_a / "to_delete.py"
+        temp_file.write_text("# will be deleted")
+
+        os.system(f"cd {git_workspace} && git add -A && git commit -q -m 'Add file'")
+
+        temp_file.unlink()
+        os.system(f"cd {git_workspace} && git add -A && git commit -q -m 'Delete file'")
+
+        workspace = Workspace.discover(git_workspace)
+        result = get_changed_packages(workspace, "HEAD~1")
+
+        names = [p.name for p in result.changed]
+        assert "pkg-a" in names
