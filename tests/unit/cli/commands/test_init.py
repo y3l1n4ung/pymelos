@@ -148,3 +148,49 @@ class TestInitWorkspace:
         assert "pytest" in content
         assert "ruff" in content
         assert "mypy" in content
+
+    def test_initializes_git_repo(self, temp_dir: Path) -> None:
+        """Should initialize git repository."""
+        init_workspace(temp_dir, name="test-project")
+
+        git_dir = temp_dir / ".git"
+        assert git_dir.exists()
+        assert git_dir.is_dir()
+
+    def test_skips_git_init_if_already_repo(self, temp_dir: Path) -> None:
+        """Should not reinitialize if .git exists."""
+        # Create existing git repo with a config
+        git_dir = temp_dir / ".git"
+        git_dir.mkdir()
+        config = git_dir / "config"
+        config.write_text("[core]\n\ttest = true\n")
+
+        init_workspace(temp_dir, name="test-project")
+
+        # Config should be unchanged
+        assert config.read_text() == "[core]\n\ttest = true\n"
+
+    def test_handles_nested_path_creation(self, temp_dir: Path) -> None:
+        """Should create deeply nested directories."""
+        nested = temp_dir / "a" / "b" / "c" / "workspace"
+        init_workspace(nested, name="nested-project")
+
+        assert nested.exists()
+        assert (nested / "pymelos.yaml").exists()
+
+    def test_name_with_special_characters(self, temp_dir: Path) -> None:
+        """Should handle names with hyphens and underscores."""
+        init_workspace(temp_dir, name="my-cool_project")
+
+        content = (temp_dir / "pymelos.yaml").read_text()
+        assert "name: my-cool_project" in content
+
+    def test_clean_patterns_in_pymelos_yaml(self, temp_dir: Path) -> None:
+        """Should include clean patterns."""
+        init_workspace(temp_dir, name="test-project")
+
+        content = (temp_dir / "pymelos.yaml").read_text()
+        assert "clean:" in content
+        assert "__pycache__" in content
+        assert "protected:" in content
+        assert ".git" in content

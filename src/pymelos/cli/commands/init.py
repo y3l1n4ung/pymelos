@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import contextlib
+import subprocess
 from pathlib import Path
 
 from pymelos.errors import ConfigurationError
@@ -142,3 +144,8 @@ htmlcov/
 """,
             encoding="utf-8",
         )
+
+    # Initialize git if not already a repo
+    if not (path / ".git").exists():
+        with contextlib.suppress(subprocess.CalledProcessError, FileNotFoundError):
+            subprocess.run(["git", "init"], cwd=path, capture_output=True, check=True)
