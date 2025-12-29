@@ -57,8 +57,12 @@ read -p "Publish to PyPI? (y/N) " -n 1 -r
 echo ""
 
 if [[ $REPLY =~ ^[Yy]$ ]]; then
+    if [ -z "$UV_PUBLISH_TOKEN" ]; then
+        echo -e "${RED}Error: UV_PUBLISH_TOKEN not set. Add it to .env${NC}"
+        exit 1
+    fi
     echo -e "\n${YELLOW}Publishing to PyPI...${NC}"
-    uv publish
+    uv publish --token "$UV_PUBLISH_TOKEN"
     echo -e "${GREEN}Published to PyPI!${NC}"
     echo -e "View at: https://pypi.org/project/pymelos/"
 fi
