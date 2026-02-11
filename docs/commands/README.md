@@ -20,7 +20,7 @@ Pymelos provides a suite of commands to manage your workspace.
 
 - [`changed`](changed.md): List changed packages.
 - [`version`](version.md): Manage versions and changelogs.
-- [`release`](release.md): Version and publish packages.
+- [`release`](release.md): Publish packages to the registry.
 
 ## Global Options
 

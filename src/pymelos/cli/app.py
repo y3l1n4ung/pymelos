@@ -450,37 +450,13 @@ def release(
         str | None,
         typer.Option("--scope", "-s", help="Package scope filter"),
     ] = None,
-    bump: Annotated[
-        str | None,
-        typer.Option("--bump", "-b", help="Force bump type (major, minor, patch)"),
-    ] = None,
-    prerelease: Annotated[
-        str | None,
-        typer.Option("--prerelease", help="Prerelease tag (alpha, beta, rc)"),
-    ] = None,
     dry_run: Annotated[
         bool,
         typer.Option("--dry-run", help="Show what would be released"),
     ] = False,
-    publish: Annotated[
-        bool,
-        typer.Option("--publish", help="Publish to PyPI"),
-    ] = False,
-    no_git_tag: Annotated[
-        bool,
-        typer.Option("--no-git-tag", help="Skip creating git tags"),
-    ] = False,
-    no_changelog: Annotated[
-        bool,
-        typer.Option("--no-changelog", help="Skip changelog generation"),
-    ] = False,
-    no_commit: Annotated[
-        bool,
-        typer.Option("--no-commit", help="Skip git commit"),
-    ] = False,
     yes: Annotated[bool, typer.Option("--yes", "-y", help="Skip confirmation")] = False,
 ) -> None:
-    """Version and publish packages."""
+    """Publish packages to the registry."""
     from pymelos.commands import handle_release_command
 
     workspace = get_workspace()
@@ -491,13 +467,7 @@ def release(
             console=console,
             error_console=error_console,
             scope=scope,
-            bump=bump,
-            prerelease=prerelease,
             dry_run=dry_run,
-            publish=publish,
-            no_git_tag=no_git_tag,
-            no_changelog=no_changelog,
-            no_commit=no_commit,
             yes=yes,
         )
     )
