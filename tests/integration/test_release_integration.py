@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 import subprocess
 import sys
 from pathlib import Path
@@ -127,7 +126,7 @@ class TestReleaseWorkflow:
         assert "pymelos-test-pkg" in result.stdout
 
     @patch("pymelos.uv.build_and_publish")
-    def test_release_calls_publish(self, mock_publish: MagicMock, release_workspace: Path) -> None:
+    def test_release_calls_publish(self, _: MagicMock, release_workspace: Path) -> None:
         """Release calls publish."""
         # We need to use mock in the actual process, which is hard with subprocess.
         # But for integration test we can just verify it doesn't crash and reports correctly.
