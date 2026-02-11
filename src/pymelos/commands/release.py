@@ -37,15 +37,20 @@ class ReleaseOptions:
     scope: str | None = None
     dry_run: bool = False
     publish: bool = True  # Default to true for release command
-    verbose: bool = False
 
 
 class ReleaseCommand(Command[ReleaseResult]):
     """Release packages by building and publishing."""
 
-    def __init__(self, context: CommandContext, options: ReleaseOptions | None = None) -> None:
+    def __init__(
+        self,
+        context: CommandContext,
+        options: ReleaseOptions | None = None,
+        packages: list[Package] | None = None,
+    ) -> None:
         super().__init__(context)
         self.options = options or ReleaseOptions()
+        self._packages = packages
 
     @property
     def is_dry_run(self) -> bool:
@@ -54,6 +59,9 @@ class ReleaseCommand(Command[ReleaseResult]):
 
     def get_packages_to_release(self) -> list[Package]:
         """Get packages that are candidates for release."""
+        if self._packages is not None:
+            return self._packages
+
         from pymelos.filters import filter_by_scope
 
         pkgs = filter_by_scope(list(self.workspace.packages.values()), self.options.scope)
@@ -91,14 +99,18 @@ class ReleaseCommand(Command[ReleaseResult]):
             return ReleaseResult(releases=[], success=True)
 
         releases = []
+        final_packages = []
         for pkg in packages:
-            if self._is_releasable(pkg):
+            # Only run releasable check if we don't have pre-passed packages
+            # (If packages were passed, they were already checked in the plan phase)
+            if self._packages is not None or self._is_releasable(pkg):
                 releases.append(
                     PackageRelease(
                         name=pkg.name,
                         version=pkg.version,
                     )
                 )
+                final_packages.append(pkg)
 
         if not releases:
             return ReleaseResult(releases=[], success=True)
@@ -119,6 +131,7 @@ async def release(
     scope: str | None = None,
     dry_run: bool = False,
     publish: bool = True,
+    packages: list[Package] | None = None,
 ) -> ReleaseResult:
     """Convenience function to release packages."""
     context = CommandContext(workspace=workspace, dry_run=dry_run)
@@ -127,7 +140,7 @@ async def release(
         dry_run=dry_run,
         publish=publish,
     )
-    cmd = ReleaseCommand(context, options)
+    cmd = ReleaseCommand(context, options, packages=packages)
     return await cmd.execute()
 
 
@@ -145,14 +158,22 @@ async def handle_release_command(
 
     try:
         # 1. Generate Plan (forced dry_run)
-        plan = await release(
-            workspace,
-            scope=scope,
-            dry_run=True,
-            publish=True,
-        )
+        # We first get all potential packages matching scope
+        from pymelos.filters import filter_by_scope
 
-        if not plan.releases:
+        all_pkgs = filter_by_scope(list(workspace.packages.values()), scope)
+
+        # Filter to only releasable ones once
+        releasable_pkgs = []
+        from pymelos.uv.publish import PublishIssueSeverity, check_publishable
+
+        for pkg in all_pkgs:
+            issues = check_publishable(pkg.path)
+            fatal = [i for i in issues if i.severity == PublishIssueSeverity.FATAL]
+            if not fatal:
+                releasable_pkgs.append(pkg)
+
+        if not releasable_pkgs:
             console.print("[yellow]No packages to release[/yellow]")
             return
 
@@ -164,8 +185,8 @@ async def handle_release_command(
         table.add_column("Package", style="cyan")
         table.add_column("Version", style="green")
 
-        for r in plan.releases:
-            table.add_row(r.name, r.version)
+        for pkg in releasable_pkgs:
+            table.add_row(pkg.name, pkg.version)
 
         console.print(table)
 
@@ -178,12 +199,13 @@ async def handle_release_command(
             console.print("[yellow]Release cancelled.[/yellow]")
             return
 
-        # 3. Execution
+        # 3. Execution (Pass the already filtered packages)
         result = await release(
             workspace,
             scope=scope,
             dry_run=False,
             publish=True,
+            packages=releasable_pkgs,
         )
 
         if result.success:
