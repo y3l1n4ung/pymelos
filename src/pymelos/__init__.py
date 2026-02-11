@@ -31,7 +31,7 @@ from pymelos.execution import (
 )
 from pymelos.workspace import DependencyGraph, Package, Workspace
 
-__version__ = "0.1.4"
+__version__ = "0.1.5"
 
 __all__ = [
     # Version

@@ -1,6 +1,6 @@
 [project]
 name = "pymelos"
-version = "0.1.4"
+version = "0.1.5"
 description = "Python monorepo manager"
 requires-python = ">=3.10"
 readme = "README.md"
@@ -104,7 +104,7 @@ markers = [
 
 [tool.commitizen]
 name = "cz_conventional_commits"
-version = "0.1.4"
+version = "0.1.5"
 tag_format = "v$version"
 version_files = [
     "pyproject.toml:version",
