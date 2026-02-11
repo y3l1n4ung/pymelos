@@ -2,10 +2,27 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+from enum import Enum, auto
 from pathlib import Path
 
 from pymelos.errors import PublishError
 from pymelos.uv.client import run_uv
+
+
+class PublishIssueSeverity(Enum):
+    """Severity level of a publish issue."""
+
+    FATAL = auto()
+    WARNING = auto()
+
+
+@dataclass(frozen=True)
+class PublishIssue:
+    """A structured issue identified during publish pre-check."""
+
+    message: str
+    severity: PublishIssueSeverity
 
 
 def build(
@@ -124,20 +141,22 @@ def build_and_publish(
     publish(cwd, repository=repository, token=token, dist_dir=dist_dir)
 
 
-def check_publishable(cwd: Path) -> list[str]:
+def check_publishable(cwd: Path) -> list[PublishIssue]:
     """Check if a package can be published.
 
     Args:
         cwd: Package directory.
 
     Returns:
-        List of issues (empty if publishable).
+        List of structured issues (empty if publishable).
     """
-    issues: list[str] = []
+    issues: list[PublishIssue] = []
 
     pyproject = cwd / "pyproject.toml"
     if not pyproject.exists():
-        issues.append("No pyproject.toml found")
+        issues.append(
+            PublishIssue("No pyproject.toml found", PublishIssueSeverity.FATAL)
+        )
         return issues
 
     from pymelos.compat import tomllib
@@ -151,12 +170,27 @@ def check_publishable(cwd: Path) -> list[str]:
     required = ["name", "version", "description"]
     for field in required:
         if not project.get(field):
-            issues.append(f"Missing required field: project.{field}")
+            issues.append(
+                PublishIssue(
+                    f"Missing required field: project.{field}",
+                    PublishIssueSeverity.FATAL,
+                )
+            )
 
     # Recommended fields
     if not project.get("readme"):
-        issues.append("Missing recommended field: project.readme")
+        issues.append(
+            PublishIssue(
+                "Missing recommended field: project.readme",
+                PublishIssueSeverity.WARNING,
+            )
+        )
     if not project.get("license"):
-        issues.append("Missing recommended field: project.license")
+        issues.append(
+            PublishIssue(
+                "Missing recommended field: project.license",
+                PublishIssueSeverity.WARNING,
+            )
+        )
 
     return issues

@@ -61,11 +61,11 @@ class ReleaseCommand(Command[ReleaseResult]):
 
     def _is_releasable(self, pkg: Package) -> bool:
         """Check if a package is releasable."""
-        from pymelos.uv.publish import check_publishable
+        from pymelos.uv.publish import PublishIssueSeverity, check_publishable
 
         issues = check_publishable(pkg.path)
-        # Only treat "Missing required field" as blocking
-        fatal = [i for i in issues if "required" in i.lower()]
+        # Only treat FATAL issues as blocking
+        fatal = [i for i in issues if i.severity == PublishIssueSeverity.FATAL]
         return len(fatal) == 0
 
     def _publish_releases(self, releases: list[PackageRelease]) -> str | None:
