@@ -58,7 +58,7 @@ def test_check_publishable(tmp_path):
     # Invalid
     (tmp_path / "pyproject.toml").write_text("[project]\nname='foo'", encoding="utf-8")
     issues = check_publishable(tmp_path)
-    assert any("Missing required field: project.version" in i for i in issues)
+    assert any("Missing required field: project.version" in i.message for i in issues)
 
     # Valid
     (tmp_path / "pyproject.toml").write_text(
@@ -67,9 +67,10 @@ name = "valid-pkg"
 version = "1.0.0"
 description = "Desc"
 readme = "README.md"
-license = "MIT"
+license = {text = "MIT"}
 """,
         encoding="utf-8",
     )
+    (tmp_path / "README.md").touch()
     issues = check_publishable(tmp_path)
     assert not issues
