@@ -5,8 +5,6 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from pymelos.commands.base import CommandContext
 from pymelos.commands.release import (
     PackageRelease,
@@ -142,7 +140,9 @@ class TestReleaseCommand:
         assert mock_publish.called
 
     @patch("pymelos.uv.build_and_publish")
-    async def test_publish_error_handling(self, mock_publish: MagicMock, git_workspace: Path) -> None:
+    async def test_publish_error_handling(
+        self, mock_publish: MagicMock, git_workspace: Path
+    ) -> None:
         """Should handle publish errors gracefully."""
         mock_publish.side_effect = Exception("Authentication failed")
 
