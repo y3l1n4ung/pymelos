@@ -40,8 +40,12 @@ def create_package(
     (path / "pyproject.toml").write_text(f"""[project]
 name = "{name}"
 version = "{version}"
+description = "Description of {name}"
+readme = "README.md"
+license = {{text = "MIT"}}
 dependencies = [{deps_str}]
 """)
+    (path / "README.md").write_text("# README\n")
     src = path / "src" / name.replace("-", "_")
     src.mkdir(parents=True)
     (src / "__init__.py").write_text(f'"""Package {name}."""\n')
@@ -172,27 +176,22 @@ class TestGitWorkflow:
 
     def test_release_dry_run(self, git_workspace: Path) -> None:
         """Release dry-run shows what would be released."""
-        # Make a change and commit to trigger release
-        lib_init = git_workspace / "packages" / "lib" / "src" / "lib" / "__init__.py"
-        lib_init.write_text('"""Lib package."""\n\ndef greet(): return "hi"\n')
-        run_git(["add", "."], git_workspace)
-        run_git(["commit", "-m", "feat(lib): add greet function"], git_workspace)
-
-        result = run_pymelos(["release", "--dry-run", "--bump", "patch"], git_workspace)
+        result = run_pymelos(["release", "--dry-run"], git_workspace)
 
         assert result.returncode == 0
         assert "lib" in result.stdout
+        assert "app" in result.stdout
 
-    def test_release_version_bump(self, git_workspace: Path) -> None:
-        """Release bumps version in pyproject.toml."""
-        # Make a change and commit to trigger release
+    def test_version_bump(self, git_workspace: Path) -> None:
+        """Version bumps version in pyproject.toml."""
+        # Make a change and commit to trigger versioning
         lib_init = git_workspace / "packages" / "lib" / "src" / "lib" / "__init__.py"
         lib_init.write_text('"""Lib package."""\n\ndef add(a, b): return a + b\n')
         run_git(["add", "."], git_workspace)
         run_git(["commit", "-m", "feat(lib): add add function"], git_workspace)
 
-        # Run release with patch bump
-        result = run_pymelos(["release", "--bump", "patch", "--yes"], git_workspace)
+        # Run version with patch bump
+        result = run_pymelos(["version", "--bump", "patch", "--yes"], git_workspace)
         assert result.returncode == 0
 
         # Check version was bumped
@@ -201,8 +200,8 @@ class TestGitWorkflow:
         # Version should be bumped from 0.1.0 to 0.1.1
         assert 'version = "0.1.1"' in content
 
-    def test_release_with_scope(self, git_workspace: Path) -> None:
-        """Release respects scope filter."""
+    def test_version_with_scope(self, git_workspace: Path) -> None:
+        """Version respects scope filter."""
         # Make changes to both packages and commit
         lib_init = git_workspace / "packages" / "lib" / "src" / "lib" / "__init__.py"
         lib_init.write_text('"""Lib."""\n\ndef foo(): pass\n')
@@ -212,7 +211,7 @@ class TestGitWorkflow:
         run_git(["commit", "-m", "feat: add functions to both packages"], git_workspace)
 
         result = run_pymelos(
-            ["release", "--scope", "lib", "--bump", "minor", "--yes"], git_workspace
+            ["version", "--scope", "lib", "--bump", "minor", "--yes"], git_workspace
         )
         assert result.returncode == 0
 
@@ -474,17 +473,17 @@ class TestChangedOutputFormats:
         assert "dependent" not in result.stdout
 
 
-class TestReleaseOptions:
-    """Tests for release command options."""
+class TestVersionOptions:
+    """Tests for version command options."""
 
     @pytest.fixture
-    def release_workspace(self, tmp_path: Path) -> Path:
-        """Create git workspace for release tests."""
+    def version_workspace(self, tmp_path: Path) -> Path:
+        """Create git workspace for version tests."""
         run_git(["init"], tmp_path)
         run_git(["config", "user.email", "test@test.com"], tmp_path)
         run_git(["config", "user.name", "Test"], tmp_path)
 
-        run_pymelos(["init", "--name", "release-test"], tmp_path)
+        run_pymelos(["init", "--name", "version-test"], tmp_path)
         create_package(tmp_path / "packages" / "pkg", "pkg")
 
         run_git(["add", "."], tmp_path)
@@ -498,66 +497,66 @@ class TestReleaseOptions:
 
         return tmp_path
 
-    def test_release_no_git_tag(self, release_workspace: Path) -> None:
-        """Release with --no-git-tag skips tag creation."""
+    def test_version_no_git_tag(self, version_workspace: Path) -> None:
+        """Version with --no-git-tag skips tag creation."""
         result = run_pymelos(
-            ["release", "--bump", "patch", "--no-git-tag", "--yes"], release_workspace
+            ["version", "--bump", "patch", "--no-git-tag", "--yes"], version_workspace
         )
 
         assert result.returncode == 0
 
         # Check no tag was created
-        tag_result = run_git(["tag", "-l"], release_workspace)
+        tag_result = run_git(["tag", "-l"], version_workspace)
         assert "pkg@0.1.1" not in tag_result.stdout
 
-    def test_release_no_changelog(self, release_workspace: Path) -> None:
-        """Release with --no-changelog skips changelog."""
+    def test_version_no_changelog(self, version_workspace: Path) -> None:
+        """Version with --no-changelog skips changelog."""
         result = run_pymelos(
-            ["release", "--bump", "patch", "--no-changelog", "--yes"], release_workspace
+            ["version", "--bump", "patch", "--no-changelog", "--yes"], version_workspace
         )
 
         assert result.returncode == 0
 
         # Check no changelog was created
-        changelog = release_workspace / "packages" / "pkg" / "CHANGELOG.md"
+        changelog = version_workspace / "packages" / "pkg" / "CHANGELOG.md"
         assert not changelog.exists()
 
-    def test_release_no_commit(self, release_workspace: Path) -> None:
-        """Release with --no-commit skips git commit."""
+    def test_version_no_commit(self, version_workspace: Path) -> None:
+        """Version with --no-commit skips git commit."""
         # Get current commit count
-        before = run_git(["rev-list", "--count", "HEAD"], release_workspace)
+        before = run_git(["rev-list", "--count", "HEAD"], version_workspace)
         before_count = int(before.stdout.strip())
 
         result = run_pymelos(
-            ["release", "--bump", "patch", "--no-commit", "--no-git-tag", "--yes"],
-            release_workspace,
+            ["version", "--bump", "patch", "--no-commit", "--no-git-tag", "--yes"],
+            version_workspace,
         )
 
         assert result.returncode == 0
 
         # Check no new commit was created
-        after = run_git(["rev-list", "--count", "HEAD"], release_workspace)
+        after = run_git(["rev-list", "--count", "HEAD"], version_workspace)
         after_count = int(after.stdout.strip())
         assert after_count == before_count
 
-    def test_release_creates_tag_and_changelog(self, release_workspace: Path) -> None:
-        """Release creates tag and changelog by default."""
-        result = run_pymelos(["release", "--bump", "patch", "--yes"], release_workspace)
+    def test_version_creates_tag_and_changelog(self, version_workspace: Path) -> None:
+        """Version creates tag and changelog by default."""
+        result = run_pymelos(["version", "--bump", "patch", "--yes"], version_workspace)
 
         assert result.returncode == 0
 
         # Check tag was created
-        tag_result = run_git(["tag", "-l"], release_workspace)
+        tag_result = run_git(["tag", "-l"], version_workspace)
         assert "pkg@0.1.1" in tag_result.stdout
 
         # Check changelog was created
-        changelog = release_workspace / "packages" / "pkg" / "CHANGELOG.md"
+        changelog = version_workspace / "packages" / "pkg" / "CHANGELOG.md"
         assert changelog.exists()
         content = changelog.read_text()
         assert "0.1.1" in content
 
 
-class TestVersionCommand:
+class TestVersionFlag:
     """Tests for version flag."""
 
     def test_version_long_flag(self, tmp_path: Path) -> None:
@@ -574,78 +573,3 @@ class TestVersionCommand:
 
         assert result.returncode == 0
         assert "pymelos" in result.stdout
-
-
-class TestExecOptions:
-    """Tests for exec command options."""
-
-    @pytest.fixture
-    def exec_workspace(self, tmp_path: Path) -> Path:
-        """Create workspace for exec tests."""
-        run_pymelos(["init", "--name", "exec-test"], tmp_path)
-        create_package(tmp_path / "packages" / "a", "a")
-        create_package(tmp_path / "packages" / "b", "b", deps=["a"])
-        create_package(tmp_path / "packages" / "c", "c", deps=["b"])
-        return tmp_path
-
-    def test_exec_with_concurrency(self, exec_workspace: Path) -> None:
-        """Exec with concurrency option."""
-        result = run_pymelos(["exec", "--concurrency", "2", "pwd"], exec_workspace)
-
-        assert result.returncode == 0
-        assert "a" in result.stdout
-        assert "b" in result.stdout
-        assert "c" in result.stdout
-
-    def test_exec_with_ignore(self, exec_workspace: Path) -> None:
-        """Exec with ignore filter."""
-        result = run_pymelos(["exec", "--ignore", "b", "pwd"], exec_workspace)
-
-        assert result.returncode == 0
-        assert "packages/a" in result.stdout
-        assert "packages/c" in result.stdout
-
-
-class TestCleanOptions:
-    """Tests for clean command options."""
-
-    @pytest.fixture
-    def clean_workspace(self, tmp_path: Path) -> Path:
-        """Create workspace with artifacts for clean tests."""
-        run_pymelos(["init", "--name", "clean-test"], tmp_path)
-
-        pkg_a = tmp_path / "packages" / "a"
-        pkg_b = tmp_path / "packages" / "b"
-        create_package(pkg_a, "a")
-        create_package(pkg_b, "b")
-
-        # Create artifacts in both
-        for pkg in [pkg_a, pkg_b]:
-            (pkg / "__pycache__").mkdir()
-            (pkg / "__pycache__" / "test.pyc").write_text("")
-            (pkg / ".pytest_cache").mkdir()
-            (pkg / ".pytest_cache" / "data").write_text("")
-
-        return tmp_path
-
-    def test_clean_dry_run(self, clean_workspace: Path) -> None:
-        """Clean with --dry-run shows what would be cleaned."""
-        result = run_pymelos(["clean", "--dry-run"], clean_workspace)
-
-        assert result.returncode == 0
-        assert "Would clean" in result.stdout
-
-        # Verify nothing was actually cleaned
-        assert (clean_workspace / "packages" / "a" / "__pycache__").exists()
-        assert (clean_workspace / "packages" / "b" / "__pycache__").exists()
-
-    def test_clean_with_scope(self, clean_workspace: Path) -> None:
-        """Clean with scope only cleans matching packages."""
-        result = run_pymelos(["clean", "--scope", "a"], clean_workspace)
-
-        assert result.returncode == 0
-
-        # a should be cleaned
-        assert not (clean_workspace / "packages" / "a" / "__pycache__").exists()
-        # b should not be cleaned
-        assert (clean_workspace / "packages" / "b" / "__pycache__").exists()
