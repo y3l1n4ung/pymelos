@@ -46,11 +46,14 @@ def test_uv_publish_mocked(tmp_path):
         )
 
         mock_run.assert_called_once()
-        args = mock_run.call_args[0][0]
-        assert "publish" in args
-        assert "--publish-url" in args
-        assert "--token" in args
-        assert str(dist_dir / "pkg-0.1.0.whl") in args
+        args, kwargs = mock_run.call_args
+        assert "publish" in args[0]
+        assert "--publish-url" in args[0]
+        assert str(dist_dir / "pkg-0.1.0.whl") in args[0]
+
+        # Check environment variable
+        env = kwargs.get("env", {})
+        assert env.get("UV_PUBLISH_TOKEN") == "token"
 
 
 def test_check_publishable(tmp_path):

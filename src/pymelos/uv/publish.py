@@ -62,8 +62,6 @@ def publish(
     *,
     repository: str | None = None,
     token: str | None = None,
-    username: str | None = None,
-    password: str | None = None,
     dist_dir: Path | None = None,
 ) -> None:
     """Publish package to a registry.
@@ -72,23 +70,18 @@ def publish(
         cwd: Package directory.
         repository: Repository URL.
         token: API token for authentication.
-        username: Username for authentication.
-        password: Password for authentication.
         dist_dir: Directory containing distributions.
 
     Raises:
         PublishError: If publish fails.
     """
     args = ["publish"]
+    env = {}
 
     if repository:
         args.extend(["--publish-url", repository])
     if token:
-        args.extend(["--token", token])
-    if username:
-        args.extend(["--username", username])
-    if password:
-        args.extend(["--password", password])
+        env["UV_PUBLISH_TOKEN"] = token
 
     # Add distribution files
     dist = dist_dir or (cwd / "dist")
@@ -110,7 +103,7 @@ def publish(
     args.extend(str(d) for d in dists)
 
     try:
-        run_uv(args, cwd=cwd)
+        run_uv(args, cwd=cwd, env=env)
     except Exception as e:
         raise PublishError(str(e), package_name=cwd.name, registry=repository) from e
 
@@ -154,9 +147,7 @@ def check_publishable(cwd: Path) -> list[PublishIssue]:
 
     pyproject = cwd / "pyproject.toml"
     if not pyproject.exists():
-        issues.append(
-            PublishIssue("No pyproject.toml found", PublishIssueSeverity.FATAL)
-        )
+        issues.append(PublishIssue("No pyproject.toml found", PublishIssueSeverity.FATAL))
         return issues
 
     from pymelos.compat import tomllib
